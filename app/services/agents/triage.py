@@ -2,13 +2,16 @@ from datetime import timedelta
 
 from sqlalchemy import select
 
-from app.models import Alert, Case, CaseAlert, CaseEvent, CaseTimeline, SecurityEvent
+from app.models import Alert, Asset, Case, CaseAlert, CaseEvent, CaseTimeline, SecurityEvent
 from app.models.base import utcnow
 from app.services.agents.base import BaseAgent
 from app.services.mitre import map_signature_to_techniques, get_technique
 
 SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"]
 MAX_TECHNIQUES = 8
+# A network-detection case at this severity or above also raises an Alert, so a live attack shows up on
+# the Alerts dashboard panel too, not only in Cases. These carry no CVE — they're traffic, not a vuln match.
+ALERT_WORTHY = {"critical", "high"}
 
 SYSTEM = """You are a triage analyst for an OT/ICS environment. Given correlated alerts and events decide whether
 they form one incident. JSON: {"is_incident":bool,"title","summary","severity"(info|low|medium|high|critical),
@@ -132,4 +135,25 @@ class TriageAgent(BaseAgent):
         self.db.add_all([CaseTimeline(case_id=case.id, entry_type="action", source="agent",
                                       content=f"Recommended: {a}") for a in data.get("recommended_actions", [])])
         await self.step("create_case", f"{case.title} ({case.severity})")
+        if events and case.severity in ALERT_WORTHY:
+            await self.raise_network_alert(case, events)
         return case
+
+    async def raise_network_alert(self, case: Case, events: list[SecurityEvent]) -> None:
+        """Network-detection cases carry no CVE, so they never go through alert_checker.py. Raise one here,
+        linked to the host under attack (matched/created by dest IP), so it still appears as an Alert."""
+        dest_ip = next((e.dest_ip for e in events if e.dest_ip), None)
+        asset = None
+        if dest_ip:
+            asset = (await self.db.execute(select(Asset).where(
+                Asset.user_id == self.user_id, Asset.last_known_ip == dest_ip))).scalars().first()
+        if not asset:
+            asset = Asset(user_id=self.user_id, name=dest_ip or "Unknown host", asset_type="host",
+                          last_known_ip=dest_ip, criticality="medium", discovery_method="live_sensor")
+            self.db.add(asset)
+            await self.db.flush()
+        alert = Alert(user_id=self.user_id, asset_id=asset.id, cve_id=None, title=case.title,
+                      description=case.summary, severity=case.severity, is_synthetic=case.is_synthetic)
+        self.db.add(alert)
+        await self.db.flush()
+        self.db.add(CaseAlert(case_id=case.id, alert_id=alert.id))

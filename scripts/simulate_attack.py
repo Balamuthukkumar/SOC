@@ -73,6 +73,8 @@ def main() -> int:
     ap.add_argument("--url", default="http://localhost:8000")
     ap.add_argument("--email", default="admin@example.com")
     ap.add_argument("--password", default="password123")
+    ap.add_argument("--hidden", action="store_true",
+                    help="tag the events synthetic so the dashboard/alerts/cases hide them (default: visible)")
     a = ap.parse_args()
     now = datetime.now(timezone.utc)
 
@@ -88,7 +90,7 @@ def main() -> int:
         def cases():
             # include_synthetic=true: this script's own events/cases are tagged synthetic and would otherwise
             # be invisible here too, same as on the dashboard.
-            return http.get("/cases/", params={"size": 100, "include_synthetic": "true"}).json()
+            return http.get("/cases/", params={"size": 100, "include_synthetic": str(a.hidden).lower()}).json()
         before = {"events": http.get("/events/stats").json()["data"]["total_events"], "cases": cases()["total"],
                   "devices": http.get("/ot/discovered-devices").json()["total"]}
 
@@ -97,7 +99,7 @@ def main() -> int:
         for name, rows in STAGES:
             batch = [eve(*row, now) for row in rows]
             res = http.post("/events/ingest", json={"source_type": "suricata", "source_name": SENSOR_NAME,
-                                                     "events": batch, "synthetic": True})
+                                                     "events": batch, "synthetic": a.hidden})
             ok = res.json()["data"]["accepted"]; total += ok
             print(f"  stage {name:32s} -> sent {len(batch)} events, accepted {ok}")
         http.post("/ot/ingest/single", json=ROGUE_DEVICE)
@@ -122,7 +124,7 @@ def main() -> int:
 
         print("\n=== Did the platform see each stage? (event search by attack IPs, include_synthetic=true) ===")
         for label, ip in (("attacker", ATTACKER), ("pivot host", PIVOT)):
-            n = http.get("/events/", params={"source_ip": ip, "size": 1, "include_synthetic": "true"}).json()["total"]
+            n = http.get("/events/", params={"source_ip": ip, "size": 1, "include_synthetic": str(a.hidden).lower()}).json()["total"]
             print(f"  events from {label} {ip}: {n}")
         hunt = http.post("/hunt/", json={"hypothesis": "unauthorized modbus writes or s7 stop commands to PLCs"}).json()["data"]
         print(f"  hunt 'unauthorized modbus/S7 to PLCs': {[q['row_count'] for q in hunt['query_results']]} rows per query")

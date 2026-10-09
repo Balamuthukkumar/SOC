@@ -15,7 +15,12 @@ export default function Compliance() {
   const act = useAction()
 
   const assess = async () => { await act.run(() => api('/compliance/assess', { method: 'POST' })); reload() }
-  const setStatus = async (controlPk: number, status: string) => {
+  const setStatus = async (controlPk: number, status: string, prev: string, isAutomated: boolean) => {
+    if (status === prev) return  // selecting the same value must never fire a write (some browsers re-fire onChange)
+    if (isAutomated && !window.confirm(
+      'This control is currently auto-assessed from real platform telemetry. Overriding it by hand replaces that ' +
+      'evidence with a manual note, and "Run automated assessment" will never touch it again. Continue?'
+    )) return
     await act.run(() => api(`/compliance/controls/${controlPk}/assessment`, { method: 'PUT', body: { status, evidence_detail: 'Set manually' } })); reload()
   }
   if (loading && !data) return <Spinner />
@@ -34,7 +39,8 @@ export default function Compliance() {
       <Table rows={controls.data ?? []} cols={[
         { head: 'Control', cell: (c: any) => <span className="font-mono text-xs">{c.control_id}</span> }, { head: 'Title', cell: (c: any) => c.title },
         { head: 'Category', cell: (c: any) => <span className="text-xs text-slate-400">{c.category}</span> },
-        { head: 'Status', cell: (c: any) => <select className="input w-auto py-0.5" value={(byControl.get(c.id) as any)?.status ?? 'not_assessed'} onChange={(e) => setStatus(c.id, e.target.value)}>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select> },
+        { head: 'Status', cell: (c: any) => { const a: any = byControl.get(c.id); const cur = a?.status ?? 'not_assessed'
+          return <select className="input w-auto py-0.5" value={cur} onChange={(e) => setStatus(c.id, e.target.value, cur, a?.assessed_by === 'system')}>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select> } },
         { head: 'Evidence', cell: (c: any) => { const a: any = byControl.get(c.id); return a ? <span className="text-xs text-slate-400">{a.evidence_detail} <Badge value={a.assessed_by === 'system' ? 'automated' : 'manual'} /></span> : '' } },
       ]} />
     </Page>

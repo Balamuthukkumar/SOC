@@ -1,19 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
+export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = [], pollMs = 5000) {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const fnRef = useRef(fn)
   fnRef.current = fn
-  const reload = useCallback(async () => {
-    setLoading(true)
+  const reload = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     try { setData(await fnRef.current()); setError(null) }
     catch (e: any) { setError(e.message ?? 'Request failed') }
     finally { setLoading(false) }
   }, [])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { reload() }, deps)
+  // live refresh so new alerts/events appear without reloading the page
+  useEffect(() => {
+    if (!pollMs) return
+    const t = setInterval(() => { if (!document.hidden) reload(true) }, pollMs)
+    return () => clearInterval(t)
+  }, [pollMs, reload])
   return { data, error, loading, reload }
 }
 

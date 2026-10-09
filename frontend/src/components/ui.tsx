@@ -81,4 +81,24 @@ export function Pager({ page, pages, onPage }: { page: number; pages: number; on
   )
 }
 
-export const fmt = (d?: string | null) => (d ? new Date(d).toLocaleString() : '—')
+// Local time plus explicit UTC offset, e.g. "Oct 9, 2026, 6:20 PM (UTC+5:30)" — never bare numeric
+// day/month, which reads differently depending on the viewer's locale.
+const tzOffset = () => {
+  const mins = -new Date().getTimezoneOffset()
+  const sign = mins >= 0 ? '+' : '-'
+  const abs = Math.abs(mins)
+  return `UTC${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`
+}
+
+export const fmt = (d?: string | null) => {
+  if (!d) return '—'
+  // The API sends naive ISO timestamps (no "Z"/offset) — every one of them is UTC (utcnow() on the
+  // backend). Without a designator, JS Date treats the string as already-local and skips conversion
+  // entirely, so append "Z" when one isn't present before parsing.
+  const iso = /[Zz]|[+-]\d\d:?\d\d$/.test(d) ? d : `${d}Z`
+  const date = new Date(iso)
+  const local = date.toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
+  })
+  return `${local} (${tzOffset()})`
+}

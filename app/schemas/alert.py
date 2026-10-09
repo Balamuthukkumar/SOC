@@ -50,11 +50,13 @@ class AlertOut(ORM):
         out.asset_name, out.asset_vendor, out.asset_product = a.asset.name, a.asset.vendor, a.asset.product
         if a.is_synthetic:
             out.source_label = "Demo / test data (not a real finding)"
+        elif a.cve_id is None:
+            out.source_label = "Live network detection (SOC sensor)"
         elif a.known_exploited:
             out.source_label = "CISA Known Exploited Vulnerabilities catalogue"
         else:
             out.source_label = "NVD vulnerability feed"
-        out.detection_rule = f"CVE match: {a.cve_id}" if a.cve_id else "Vendor advisory match"
+        out.detection_rule = f"CVE match: {a.cve_id}" if a.cve_id else f"Correlated case: {a.title}"
         return out
 
 
