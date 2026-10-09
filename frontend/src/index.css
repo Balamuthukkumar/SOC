@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+:root { color-scheme: dark; }
+body { @apply bg-slate-950 text-slate-200 antialiased; font-family: ui-sans-serif, system-ui, sans-serif; }
+.card { @apply rounded-xl border border-slate-800 bg-slate-900/60 p-4; }
+.btn { @apply inline-flex whitespace-nowrap items-center gap-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50; }
+.btn-ghost { @apply inline-flex whitespace-nowrap items-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-800 disabled:opacity-50; }
+.input { @apply w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm outline-none focus:border-indigo-500; }
+.th { @apply px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-400; }
+.td { @apply px-3 py-2 text-sm; }
