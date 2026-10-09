@@ -1,88 +1,78 @@
-# SOC Platform
+# OT/ICS-Aware Security Operations Platform (SOC)
 
-Backend for an OT/ICS-aware security operations platform: asset inventory, vulnerability alerts (NVD + CISA KEV),
-security-event ingestion (Suricata / Zeek / generic), AI-assisted detect → triage → case → response workflow,
-MITRE ATT&CK mapping, threat hunting, purple-team validation, compliance, SBOMs, OT device discovery and topology.
+**OPCODE IMPACT 2026 | Hackathon Submission**
 
-A clean rewrite of the original OneAlert project: FastAPI + SQLAlchemy 2.0 (async), same `/api/v1` URLs.
+**Team ID:** OPC005
 
-## Run
+## 1. Problem Statement
+Industrial Control Systems (ICS) and Operational Technology (OT) environments operating alongside IT infrastructure face increasingly sophisticated cyber threats. Modern Security Operations Centers (SOCs) struggle with fragmented asset visibility, delayed vulnerability ingestion (NVD & CISA KEV), manual event triage overhead, and a lack of AI-assisted, safety-aware incident response autonomy tailored for critical OT safety zones.
 
+## 2. Solution Title
+OT/ICS-Aware Next-Gen Security Operations Platform (SOC)
+
+## 3. Solution Description
+Our solution is an OT/ICS-aware, AI-assisted security operations platform designed for unified asset inventory, automated vulnerability matching (NVD + CISA KEV), and real-time security-event ingestion (Suricata / Zeek / generic). It orchestrates a multi-agent AI pipeline (Detect → Triage → Hunt → Response → Purple Team) with deterministic rule-based fallbacks for offline reliability. Featuring MITRE ATT&CK mapping, OT topology & protocol discovery, SBOM management, and strict OT safety-zone autonomy policies, it empowers security analysts with end-to-end threat detection, triage, and safe remediation.
+
+## 4. Architecture Diagram
+![Architecture Diagram](docs/architecture.png)
+
+**Workflow Overview:**
+1. **Ingest & Match:** Sensors collect OT/IT events and assets; automated background schedulers sync NVD and CISA KEV feeds to match advisories against asset CPEs.
+2. **Detect & Triage:** Multi-agent pipeline (Detect Agent & Triage Agent) clusters events/alerts by IP and asset, automatically opening cases mapped to MITRE ATT&CK tactics & techniques.
+3. **Safety-Aware Response:** AI Response Agent drafts action plans evaluated against safety autonomy policies (requiring mandatory human approval for OT safety/field zones).
+4. **Validation & Hunting:** Purple-Team validation tests telemetry against ATT&CK techniques, while Hunt Agent executes validated, column-whitelisted threat queries.
+
+## 5. Technology Stack
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS v4, Lucide Icons
+- **Backend:** Python 3.11+, FastAPI, Async SQLAlchemy 2.0, Alembic, Pydantic v2, Uvicorn
+- **Database:** SQLite (development / testing) / PostgreSQL (production asyncpg)
+- **Other Technologies:** Docker & Docker Compose, Anthropic Claude / OpenAI LLM APIs, NVD & CISA KEV API Feeds, Pytest, Fernet Encryption
+
+## 6. Quick Start Guide
+**Prerequisites:** Python 3.11+, Node.js 18+, Docker (optional)
+
+**Installation & Execution:**
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+# 1. Clone the repository and setup Python virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Configure environment variables
 cp .env.example .env
-.venv/bin/python -m uvicorn app.main:app --reload      # http://localhost:8000/docs
+
+# 3. Launch Backend API Server
+python3 -m uvicorn app.main:app --reload      # Available at http://localhost:8000/docs
+
+# 4. In a separate terminal, launch Frontend development server
+cd frontend
+npm install
+npm run dev                                  # Available at http://localhost:3000
 ```
 
-Demo login (when `SEED_DEMO=true`): `admin@example.com` / `password123` — a water-treatment plant with a
-multi-stage intrusion already investigated. **Turn `SEED_DEMO` off outside local use.**
+*Demo Login (when `SEED_DEMO=true`):* `admin@example.com` / `password123`
 
-```bash
-.venv/bin/python -m pytest          # 59 tests, isolated SQLite database
-docker compose up --build           # Postgres + app; needs SECRET_KEY and POSTGRES_PASSWORD
-```
+## 7. Output Screenshots
+![Output Screenshot](docs/output.png)
 
-## Layout
+The application provides an interactive dark-themed SOC dashboard featuring real-time alert streams, OT asset health status monitors, MITRE ATT&CK heatmap matrix visualizations, incident triage timelines, and automated response action execution feeds.
 
-```
-app/
-  main.py            app wiring, middleware, health/metrics, serves frontend/dist at /app when present
-  config.py db.py security.py deps.py limiter.py middleware.py scheduler.py seed.py
-  models/            SQLAlchemy 2.0 typed models, one module per domain
-  schemas/           Pydantic request/response models
-  routers/           one module per API area (auth, assets, alerts, events, cases, mitre, hunt,
-                     response_plans, validation, ot, topology, compliance, sbom, orgs, integrations, billing)
-  services/
-    ai.py            Anthropic / OpenAI-compatible client; get_ai() is None without credentials
-    agents/          base (run ledger) · detect · triage · hunt · response · purple · orchestrator
-    feeds.py         NVD + CISA KEV fetch/parse        matching.py   advisory ↔ asset (CPE + version ranges)
-    alert_checker.py feed → alerts → notifications     notify.py     Slack / webhook / Mailgun
-    ot_risk.py topology.py compliance.py sbom.py similarity.py remediation.py epss.py
-    policy.py executor.py   response autonomy levels / action execution (SIMULATED)
-    integrations.py  Splunk, Sentinel, ServiceNow, PagerDuty (SSRF-guarded)    stripe_client.py
-migrations/          Alembic (async); `alembic upgrade head`
-tests/               pytest, one file per phase
-```
+## 8. Future Scope
+- Integration with live network TAP sensors and eBPF kernel telemetry drivers for real-time packet capturing.
+- Hardware-in-the-Loop (HIL) PLC validation and automated Modbus/DNP3 field-device payload inspection.
 
-## How it works
+## 9. Team Contributions
+| Member Name | Contribution |
+|-------------|--------------|
+| MANIKANDAN P | Backend Architecture, FastAPI API Routers, AI/ML Multi-Agent Pipelines & Detection Engines |
+| ABINAYA R | UI/UX Design & Frontend Development (React + Tailwind CSS v4 Components & Dashboard) |
+| SOWMIYA S | Cybersecurity Research, Threat Modeling, MITRE ATT&CK Mapping & Compliance Engine |
 
-1. **Ingest** — assets are entered or promoted from sensor-discovered devices; events arrive via `/events/ingest`,
-   `/events/upload`, or OT sensors via `/ot/ingest/batch`. The scheduler pulls NVD and CISA KEV every
-   `FEED_INTERVAL_HOURS`; `alert_checker` matches advisories to assets and creates deduplicated alerts.
-2. **Detect → Triage** — `POST /cases/pipeline` runs the detect agent (rules + optional LLM) then the triage agent,
-   which clusters alerts/events by shared IPs and asset, and opens cases with MITRE tactics/techniques.
-3. **Respond** — `POST /response-plans/generate?case_id=` drafts an action plan. `services/policy.py` decides per
-   action whether a human must approve (OT control/field/safety zones and destructive actions always do).
-4. **Validate** — purple-team runs check whether your own telemetry contains evidence of each ATT&CK technique.
-
-Every agent run is recorded (`/cases/agents/runs`). With no AI key configured, every agent has a deterministic
-rule-based fallback, so the whole pipeline works offline.
-
-## Deliberate behaviours worth knowing
-
-- **Response actions are simulated.** `services/executor.py` logs and reports success; nothing touches a firewall,
-  EDR or IdP. Replace an entry in `HANDLERS` to wire a real integration.
-- **Hunt never executes LLM-written SQL.** The model returns structured filters validated against a column
-  whitelist and always scoped to the caller's `user_id`.
-- **Purple-team validation is evidence-based**, not random: *detected* means a matching event exists in your data.
-  Only `dry_run` mode exists; live attack execution is intentionally not implemented.
-- **Integration credentials** are Fernet-encrypted at rest (key derived from `SECRET_KEY`) and masked in API
-  responses. Changing `SECRET_KEY` makes stored credentials unreadable.
-- **Matching is conservative on version**: an asset with no recorded version is treated as possibly affected.
-  Matching is by vendor/product *name*; a CVE for "FortiOS" will not match an asset named "FortiGate 200F".
-- Multi-worker deployments: the GitHub OAuth state store and rate limiter are per-process (use Redis for both).
-
-## Frontend
-
-React 18 + TypeScript + Vite + Tailwind 4 in `frontend/` (dashboard, alerts, assets, events, cases, hunt lab, MITRE map,
-response plans, validation, OT discovery, compliance, settings).
-
-```bash
-cd frontend && npm install
-npm run build        # -> frontend/dist, served by the backend at http://localhost:8000/app/
-npm run dev          # hot-reload UI on :3000, proxies /api to :8000
-```
-
-## Not included
-
-- Role management endpoints (users self-register as `viewer`; creating an org makes you `admin`).
+## 10. Tools Used
+| Tool / Platform | Purpose / Why Used |
+|-----------------|--------------------|
+| FastAPI & Async SQLAlchemy 2.0 | High-performance asynchronous backend API framework and database ORM |
+| React 18 + Vite + Tailwind 4 | Modern, responsive dark-mode web dashboard UI |
+| Anthropic Claude / OpenAI API | AI-driven threat detection, automated incident triage, and response playbooks |
+| Docker & Docker Compose | Multi-container deployment for database and application backend |
+| Git & GitHub | Distributed version control and collaborative development |
